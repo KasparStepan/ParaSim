@@ -1,32 +1,33 @@
 import numpy as np
-from hybridsim import (
-    World, RigidBody6DOF, Gravity, RigidTetherJoint, HybridSolver
-)
+from hybridsim import World, RigidBody6DOF, Gravity, Drag, RigidTetherJoint, HybridSolver
 
-def test_velocity_level_satisfaction_after_step():
-    # Two identical bodies connected by rigid tether
-    I = np.eye(3)
-    a = RigidBody6DOF("a", 1.0, I, np.array([0,0,1], float), np.array([1,0,0,0]))
-    b = RigidBody6DOF("b", 1.0, I, np.array([1,0,1], float), np.array([1,0,0,0]))
-    w = World(ground_z=0.0, payload_index=0)
-    ia = w.add_body(a)
-    ib = w.add_body(b)
-    joint = RigidTetherJoint(ia, ib, [0,0,0], [0,0,0], length=1.0)
-    w.add_constraint(joint.attach(w.bodies))
+def test_kkt_velocity_level_satisfaction_single_step():
+    # build world
+    w = World(ground_z=-1e6, payload_index=0)  # avoid early stop
+    I = 0.1 * np.eye(3)
+    a = RigidBody6DOF("a", 5.0, I, position=np.array([0,0,1], float),
+                      orientation=np.array([1,0,0,0], float))
+    b = RigidBody6DOF("b", 2.0, I, position=np.array([0,0,6], float),
+                      orientation=np.array([1,0,0,0], float))
+    i = w.add_body(a); j = w.add_body(b); w.payload_index = i
     w.add_global_force(Gravity(np.array([0,0,-9.81])))
+    a.per_body_forces.append(Drag(1.225, 1.0, 0.2, mode="quadratic"))
+    b.per_body_forces.append(Drag(1.225, 1.5, 0.8, mode="quadratic"))
+    # rigid tether length 5 m
+    joint = RigidTetherJoint(i, j, [0,0,0], [0,0,0], length=5.0)
+    c = joint.attach(w.bodies)
+    w.add_constraint(c)
 
-    solver = HybridSolver(alpha=10.0, beta=5.0)
-    dt = 1e-3
-    # One step
-    stop = w.step(solver, dt)
-    assert not stop
-    # Check velocity-level satisfaction: ||J v|| ~ 0
-    c = w.constraints[0]
-    nb = len(w.bodies)
-    vstack = np.zeros(6*nb)
-    for i, b in enumerate(w.bodies):
-        vstack[6*i:6*i+3] = b.v
-        vstack[6*i+3:6*i+6] = b.w
-    J = c.jacobian()
-    val = J @ np.concatenate([vstack[0:6], vstack[6:12]])
-    assert np.linalg.norm(val) < 1e-6
+    # take one fixed step
+    solver = HybridSolver(alpha=5.0, beta=0.2)
+    dt = 0.005
+    # pre-step Jv
+    v_loc = np.concatenate([a.v, a.w, b.v, b.w])
+    Jv_before = np.linalg.norm(c.jacobian() @ v_loc)
+    w.step(solver, dt)
+    # post-step Jv (use updated velocities)
+    v_loc2 = np.concatenate([a.v, a.w, b.v, b.w])
+    Jv_after = np.linalg.norm(c.jacobian() @ v_loc2)
+    # expect velocity-level violation decreased and small
+    assert Jv_after < Jv_before + 1e-9
+    assert Jv_after < 1e-6
