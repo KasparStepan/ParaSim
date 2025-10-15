@@ -85,7 +85,10 @@ class ParachuteDrag(Drag):
         self.activation_status = False
         self.gate_sharpness = float(gate_sharpness)
         self.area_collapsed = float(area_collapsed)
-        
+
+
+    # TODO: implement physical model of parachute with better accuracy
+    # TODO: Add added mass of parachute to body mass    
     def apply(self, body: RigidBody6DOF, t: Optional[float] = None) -> None:    
         tval = 0.0 if t is None else float(t)
         v = body.v
