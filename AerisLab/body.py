@@ -116,3 +116,46 @@ class RigidBody6DOF:
         self.p += self.v * dt
         qdot = quat_derivative(self.q, self.w)
         self.q = quat_normalize(self.q + qdot * dt)
+
+
+    
+class Parachute_RigidBody6DOF(RigidBody6DOF):
+    """
+    6-DoF rigid body with parachute capabilities.
+    Inherits from RigidBody6DOF and adds parachute-specific properties and methods.
+    """
+    
+    def __init__(
+        self,
+        name: str,
+        mass: float,
+        inertia_tensor_body: Array,
+        position: Array,
+        orientation: Array,
+        linear_velocity: Array | None = None,
+        angular_velocity: Array | None = None,
+        radius: float = 0.0,
+        activation_velocity: float = 30.0,  # m/s
+        gate_sharpness: float = 10.0,       # controls smoothness of activation
+        area_collapsed: float = 0.1         # m², small area when parachute is collapsed
+    ) -> None:
+        super().__init__(
+            name, mass, inertia_tensor_body, position, orientation,
+            linear_velocity, angular_velocity, radius
+        )
+
+
+    # Parachute specific added mass due to inflation
+    def add_added_mass(self, updated_mass: float, density: float, volume: float, area_projected: float, diameter_equivalent: float) -> None:
+        
+        #TODO: implement model of added mass
+        # Version 1
+        updated_mass = 2.586 * density * diameter_equivalent**3 + 0.908 * density * volume + self.mass
+        # Version 2
+        updated_mass = 0.464*density*area_projected**(3/2) + 0.908*density*volume + self.mass
+
+        #TODO: implement model for predicting parachute
+
+        self.mass=updated_mass
+        
+        
